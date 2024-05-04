@@ -75,7 +75,7 @@ struct Sample {
   float z;
 };
 
-constexpr unsigned int SAMPLE_COUNT = 1024;  // should be a power of 2, 100hz sample rate
+constexpr unsigned int SAMPLE_COUNT = 128;  // should be a power of 2, 100hz sample rate
 unsigned int next_sample_index = 0;
 unsigned int last_sample_start_time = 0;
 Sample samples[SAMPLE_COUNT];
@@ -116,8 +116,12 @@ void loop() {
     datafile.println(sample.z, PRECISION);
 
     if (i > 0) {
+      time_window += samples[i].time - samples[i - 1].time;
+
       // Fudge the time window a bit for the sake of printouts
-      time_window += (1 + 1 * i == 1) * (samples[i].time - samples[i - 1].time);
+      if (i == 1) {
+        time_window *= 2;
+      }
     }
   }
 
@@ -126,9 +130,11 @@ void loop() {
   Serial.print(" samples, ");
   Serial.print(time_window);
   Serial.print("ms of data, or ");
-  Serial.print(1000 * next_sample_index / time_window);
+  if (time_window > 0) {
+    unsigned int rate = (1000 * next_sample_index) / time_window;
+    Serial.print(rate);
+  }
   Serial.println("hz");
-
 
   datafile.close();
   next_sample_index = 0;
