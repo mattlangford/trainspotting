@@ -3,14 +3,14 @@
 #include "UUID.h"
 #include <MKRIMU.h>
 
-const int PRECISION = 5;
+const int PRECISION = 7;
 String random_string;
 
 String mag_datafile_name() {
-  return "mag_" + random_string + ".csv";
+  return "mag" + random_string + ".csv";
 }
 String imu_datafile_name() { 
-  return "imu_" + random_string + ".csv";
+  return "imu" + random_string + ".csv";
 }
 
 void setup() {
@@ -20,19 +20,15 @@ void setup() {
     ; // wait for serial port to connect. Needed for native USB port only
   }
 
-  bool success = true;
-
   pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
 
   const int chip_select = SDCARD_SS_PIN;
   Serial.print("Initializing SD card on pin ");
   Serial.print(chip_select);
   Serial.print("...");
-
-  // see if the card is present and can be initialized:
   if (!SD.begin(chip_select)) {
     Serial.println("Card failed, or not present");
-    // don't do anything more:
     while (1);
   }
   Serial.println("card initialized.");
@@ -49,90 +45,75 @@ void setup() {
   float x, y, z;
   IMU.readMagneticField(x, y, z);
   randomSeed(x + pow(y, 2) + pow(z, 3));
-  for (int i = 0; i < 3; i++)
+  for (int i = 0; i < 4; i++)
     random_string += random(0, 9);
 
   Serial.print("Initializing IMU data file ");
   Serial.print(imu_datafile_name());
   Serial.print("...");
   File imu_datafile = SD.open(imu_datafile_name(), FILE_WRITE);
-  // if the file is available, write to it:
-  if (imu_datafile) {
-    imu_datafile.println("time,x,y,z");
-    imu_datafile.close();
-    Serial.println("data file initialized.");
-  } else {
-    success = false;
+  if (!imu_datafile) {
     Serial.println("error!");
+    while (1);
   }
+  imu_datafile.println("time,x,y,z");
+  imu_datafile.close();
+  Serial.println("data file initialized.");
 
-  Serial.print("Initializing MAG data file ");
-  Serial.print(mag_datafile_name());
-  Serial.print("...");
-  File mag_datafile = SD.open(mag_datafile_name(), FILE_WRITE);
-  // if the file is available, write to it:
-  if (mag_datafile) {
-    mag_datafile.println("time,x,y,z");
-    mag_datafile.close();
-    Serial.println("data file initialized.");
-  } else {
-    success = false;
-    Serial.println("error!");
-  }
-
-  if (success) {
-    digitalWrite(LED_BUILTIN, HIGH);
-  }
+  digitalWrite(LED_BUILTIN, HIGH);
 }
 
+unsigned int count = 0;
+unsigned int last_reset = 0;
+
+struct Sample {
+  unsigned int time;
+  float x;
+  float y;
+  float z;
+};
+
+constexpr unsigned int SAMPLE_RATE = 100; // hz
+constexpr unsigned int NUM_SECONDS = 10; // s
+constexpr unsigned int SAMPLE_COUNT = SAMPLE_RATE * NUM_SECONDS;
+unsigned int next_sample_index = 0;
+Sample samples[SAMPLE_COUNT];
+
 void loop() {
-  if (IMU.magneticFieldAvailable()) {
-    float x, y, z;
-    IMU.readMagneticField(x, y, z);
-
-    File datafile = SD.open(mag_datafile_name(), FILE_WRITE);
-    if (datafile) {
-      datafile.print(millis());
-      datafile.print(',');
-      datafile.print(x, PRECISION);
-      datafile.print(',');
-      datafile.print(y, PRECISION);
-      datafile.print(',');
-      datafile.println(z, PRECISION);
-      datafile.close();
-    } else {
-      static uint32_t last_print = 0;
-      if (millis() - last_print > 1000) {
-        Serial.println("error opening mag data file.");
-        last_print = millis();
-      }
-      digitalWrite(LED_BUILTIN, LOW);
-    }
-  }
   if (IMU.accelerationAvailable()) {
-    float x, y, z;
-    IMU.readAcceleration(x, y, z);
-
-    File datafile = SD.open(imu_datafile_name(), FILE_WRITE);
-    if (datafile) {
-      datafile.print(millis());
-      datafile.print(',');
-      datafile.print(x, PRECISION);
-      datafile.print(',');
-      datafile.print(y, PRECISION);
-      datafile.print(',');
-      datafile.println(z, PRECISION);
-      datafile.close();
-    } else {
-      static uint32_t last_print = 0;
-      if (millis() - last_print > 1000) {
-        Serial.println("error opening imu data file.");
-        last_print = millis();
-      }
-      digitalWrite(LED_BUILTIN, LOW);
-    }
-
+    Sample& sample = samples[next_sample_index++];
+    samples[next_sample_index].time = millis();
+    
   }
+
+  if (next_sample_index < SAMPLE_COUNT) {
+    return;
+  }
+  digitalWrite(LED_BUILTIN, LOW);
+
+  File datafile = SD.open(imu_datafile_name(), FILE_WRITE);
+  if (!datafile) {
+    Serial.println("error opening imu data file.");
+    delay(1000);
+    return;
+  }
+
+  unsigned int read_at = millis() - 1000 * NUM_SECONDS;
+  for (unsigned int i = 0; i < SAMPLE_COUNT; ++i) {
+    datafile.print(read_at);
+    datafile.print(',');
+    datafile.print(samples[i].x, PRECISION);
+    datafile.print(',');
+    datafile.print(samples[i].y, PRECISION);
+    datafile.print(',');
+    datafile.println(samples[i].z, PRECISION);
+
+    read_at += 1000 / SAMPLE_RATE;
+  }
+
+  datafile.close();
+  next_sample_index = 0;
+  digitalWrite(LED_BUILTIN, HIGH);
 }
 
 
