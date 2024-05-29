@@ -1,21 +1,34 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import argparse
 
 def load_csv(fname):
     df = pd.read_csv(fname)
     df["time"] =  pd.to_datetime(df['time'], errors='coerce', unit='ms')
     return df
 
-imu_df = load_csv("IMU1086.csv")
-print (f"Loaded {len(imu_df)} samples over {(imu_df['time'].iloc[-1] - imu_df['time'].iloc[0]).total_seconds()}s!")
+parser = argparse.ArgumentParser()
+parser.add_argument("filename")
+parser.add_argument("-n", "--nfft", default=128)
+args = parser.parse_args()
+
+
+imu_df = load_csv(args.filename)
+duration = (imu_df['time'].iloc[-1] - imu_df['time'].iloc[0]).total_seconds()
+print (f"Loaded {len(imu_df)} samples from {args.filename} over {duration}s!")
 
 dt = imu_df['time'].diff().median().total_seconds()
 sample_rate = 1.0 / dt
 print(f"Sample rate: {sample_rate:.3f}hz")
 
-plt.figure(figsize=(20, 10))
-plt.specgram(np.sqrt(imu_df['mag2']), Fs=sample_rate, NFFT=64, noverlap=0, cmap="plasma")
-plt.xlabel("time (s)")
-plt.ylabel("freq")
+fig, axs = plt.subplots(2, 1, figsize=(30, 10), height_ratios=[3, 1])
+axs[0].specgram(np.sqrt(imu_df['mag2']), Fs=sample_rate, NFFT=args.nfft, noverlap=0, cmap="plasma")
+axs[0].set_xlabel("time (s)")
+axs[0].set_ylabel("freq")
+
+axs[1].hist(imu_df['time'].diff().dt.total_seconds(), bins=np.linspace(0, 0.1, 100))
+axs[1].set_xlabel("dt")
+axs[1].set_ylabel("count")
+
 plt.show()
