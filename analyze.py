@@ -1,25 +1,21 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import scipy.signal
-from scipy.signal import square, ShortTimeFFT
-from scipy.signal.windows import gaussian
 
 def load_csv(fname):
     df = pd.read_csv(fname)
     df["time"] =  pd.to_datetime(df['time'], errors='coerce', unit='ms')
-    df["total"] = np.linalg.norm(df[['x','y','z']].values, axis=1)
     return df
 
+imu_df = load_csv("IMU1086.csv")
+print (f"Loaded {len(imu_df)} samples over {(imu_df['time'].iloc[-1] - imu_df['time'].iloc[0]).total_seconds()}s!")
 
-imu_df = load_csv("/Volumes/data/IMU_468.csv")
-# plt.plot(imu["time"], imu["total"], label='total', color='k')
-# plt.legend()
-# plt.show()
-imu_groups = imu_df.groupby(imu_df['time'].dt.second)
+dt = imu_df['time'].diff().median().total_seconds()
+sample_rate = 1.0 / dt
+print(f"Sample rate: {sample_rate:.3f}hz")
 
-g_std = 3
-win = scipy.signal.windows.gaussian(5, std=g_std, sym=True)
-SFT = ShortTimeFFT(win, hop=2, fs=1/T_x, mfft=800, scale_to='psd')
-
-scipy.signal.spectrogram(imu_df['time'], imu_df['total'])
+plt.figure(figsize=(20, 10))
+plt.specgram(np.sqrt(imu_df['mag2']), Fs=sample_rate, NFFT=64, noverlap=0, cmap="plasma")
+plt.xlabel("time (s)")
+plt.ylabel("freq")
+plt.show()

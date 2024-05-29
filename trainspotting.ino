@@ -6,18 +6,15 @@ const int PRECISION = 7;
 String random_string;
 
 String mag_datafile_name() {
-  return "mag" + random_string + ".csv";
+  return "MAG" + random_string + ".csv";
 }
 String imu_datafile_name() {
-  return "imu" + random_string + ".csv";
+  return "IMU" + random_string + ".csv";
 }
 
 void setup() {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
-  while (!Serial) {
-    ;  // wait for serial port to connect. Needed for native USB port only
-  }
 
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
@@ -58,7 +55,7 @@ void setup() {
     while (1)
       ;
   }
-  imu_datafile.println("time,x,y,z");
+  imu_datafile.println("time,mag2");
   imu_datafile.close();
   Serial.println("data file initialized.");
 
@@ -75,7 +72,7 @@ struct Sample {
   float z;
 };
 
-constexpr unsigned int SAMPLE_COUNT = 128;  // should be a power of 2, 100hz sample rate
+constexpr unsigned int SAMPLE_COUNT = 1024;  // should be a power of 2, 100hz sample rate
 unsigned int next_sample_index = 0;
 unsigned int last_sample_start_time = 0;
 Sample samples[SAMPLE_COUNT];
@@ -92,9 +89,9 @@ void loop() {
 
   digitalWrite(LED_BUILTIN, LOW);
 
-  unsigned int now = millis();
+  unsigned int start = millis();
   Serial.print("Writing data at ");
-  Serial.print(now);
+  Serial.print(start);
   Serial.print("ms... ");
 
   File datafile = SD.open(imu_datafile_name(), O_WRONLY | O_APPEND);
@@ -106,14 +103,12 @@ void loop() {
 
   unsigned int time_window = 0;
   for (unsigned int i = 0; i < next_sample_index; ++i) {
+    
     Sample& sample = samples[i];
+    float mag2 = sample.x * sample.x + sample.y * sample.y + sample.z * sample.z;
     datafile.print(sample.time);
     datafile.print(',');
-    datafile.print(sample.x, PRECISION);
-    datafile.print(',');
-    datafile.print(sample.y, PRECISION);
-    datafile.print(',');
-    datafile.println(sample.z, PRECISION);
+    datafile.println(mag2, PRECISION);
 
     if (i > 0) {
       time_window += samples[i].time - samples[i - 1].time;
@@ -124,19 +119,21 @@ void loop() {
       }
     }
   }
+  datafile.close();
 
   Serial.print("Wrote ");
   Serial.print(next_sample_index);
-  Serial.print(" samples, ");
+  Serial.print(" samples, spanning ");
   Serial.print(time_window);
-  Serial.print("ms of data, or ");
+  Serial.print("ms (");
   if (time_window > 0) {
     unsigned int rate = (1000 * next_sample_index) / time_window;
     Serial.print(rate);
   }
-  Serial.println("hz");
+  Serial.print("hz). ");
+  Serial.print(millis() - start);
+  Serial.println("ms spent writing.");
 
-  datafile.close();
   next_sample_index = 0;
   digitalWrite(LED_BUILTIN, HIGH);
 }
