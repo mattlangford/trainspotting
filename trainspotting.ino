@@ -22,15 +22,17 @@ StreamBufferHandle_t stream_data;
 
 const int PRECISION = 7;
 String random_string;
-
-String mag_datafile_name() { return "MAG" + random_string + ".csv"; }
-String imu_datafile_name() { return "IMU" + random_string + ".csv"; }
+String datafile_name() { return random_string + ".csv"; }
 
 struct Sample {
   unsigned int time;
-  float x;
-  float y;
-  float z;
+  float a_x;
+  float a_y;
+  float a_z;
+
+  float m_x;
+  float m_y;
+  float m_z;
 };
 
 constexpr size_t SAMPLE_BUFFER_SIZE = 64;
@@ -56,8 +58,11 @@ void delay_until_ms(TickType_t *previous_wake_time, int ms) {
 //*****************************************************************
 static void timer_poll_imu(TimerHandle_t /* timer */) {
   Sample sample;
+  
   sample.time = millis();
-  IMU.readAcceleration(sample.x, sample.y, sample.z);
+  IMU.readAcceleration(sample.a_x, sample.a_y, sample.a_z);
+  IMU.readMagneticField(sample.m_x, sample.m_y, sample.m_z);
+
   if (xStreamBufferSend(stream_data, &sample, sizeof(Sample), 0) != sizeof(Sample)) {
     Serial.println("Failed to write!");
   }
@@ -70,7 +75,7 @@ static void timer_poll_imu(TimerHandle_t /* timer */) {
 static void thread_sd_write(void  * /* pvParameters */) {
   Serial.println("Thread thread_sd_write: Started");
 
-  File datafile = SD.open(imu_datafile_name(), O_WRONLY | O_APPEND);
+  File datafile = SD.open(datafile_name(), O_WRONLY | O_APPEND);
   if (!datafile) {
     Serial.println("error opening imu data file.");
 
@@ -79,6 +84,8 @@ static void thread_sd_write(void  * /* pvParameters */) {
     Serial.println("Thread thread_sd_write: Deleting");
     vTaskDelete(NULL);
   }
+  
+  datafile.println("time,acc_x,acc_y,acc_z,mag_x,mag_y,mag_z");
 
   while (1) {
     static Sample samples[SAMPLE_BUFFER_SIZE];
@@ -86,11 +93,20 @@ static void thread_sd_write(void  * /* pvParameters */) {
     const size_t num_samples = read_bytes / sizeof(Sample);
     for (size_t i = 0; i < num_samples; ++i) {
       Sample& sample = samples[i];
-      const double mag2 = sample.x * sample.x + sample.y * sample.y + sample.z * sample.z;
-
       datafile.print(sample.time);
       datafile.print(',');
-      datafile.println(mag2, PRECISION);
+      datafile.print(sample.a_x, PRECISION);
+      datafile.print(',');
+      datafile.print(sample.a_y, PRECISION);
+      datafile.print(',');
+      datafile.print(sample.a_z, PRECISION);
+      datafile.print(',');
+      datafile.print(sample.m_x, PRECISION);
+      datafile.print(',');
+      datafile.print(sample.m_y, PRECISION);
+      datafile.print(',');
+      datafile.print(sample.m_z, PRECISION);
+      datafile.println();
     }
     datafile.flush();
     delay_ms(100);
@@ -201,19 +217,16 @@ void setup() {
   float x, y, z;
   IMU.readMagneticField(x, y, z);
   randomSeed(x + pow(y, 2) + pow(z, 3));
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 7; i++)
     random_string += random(0, 9);
 
   Serial.print("Initializing IMU data file ");
-  Serial.print(imu_datafile_name());
+  Serial.print(datafile_name());
   Serial.print("...");
-  File imu_datafile = SD.open(imu_datafile_name(), FILE_WRITE);
-  if (!imu_datafile) {
+  if (!SD.open(datafile_name(), FILE_WRITE)) {
     Serial.println("error!");
     while (1);
   }
-  imu_datafile.println("time,mag2");
-  imu_datafile.close();
   Serial.println("Data file initialized.");
 
   // Set the led the rtos will blink when we have a fatal rtos error
