@@ -1,28 +1,18 @@
-//**************************************************************************
-// FreeRtos on Samd21
-// By Scott Briscoe
-//
-// Project is a simple example of how to get FreeRtos running on a SamD21 processor
-// Project can be used as a template to build your projects off of as well
-//
-//**************************************************************************
-
 #include <FreeRTOS_SAMD21.h>
 #include <SPI.h>
 #include <SD.h>
 #include <MKRIMU.h>
 
 //**************************************************************************
-// global variables
-//**************************************************************************
 TaskHandle_t handle_writer_task;
 TaskHandle_t handle_monitor_task;
 TimerHandle_t handle_poll_imu;
 StreamBufferHandle_t stream_data;
 
-const int PRECISION = 7;
 String random_string;
 String datafile_name() { return random_string + ".csv"; }
+
+//**************************************************************************
 
 struct Sample {
   unsigned int time;
@@ -39,10 +29,6 @@ constexpr size_t SAMPLE_BUFFER_SIZE = 64;
 constexpr size_t SAMPLE_BUFFER_SIZE_BYTES = SAMPLE_BUFFER_SIZE * sizeof(Sample);
 
 //**************************************************************************
-// Can use these function for RTOS delays
-// Takes into account processor speed
-// Use these instead of delay(...) in rtos tasks
-//**************************************************************************
 
 void delay_ms(int ms) {
   vTaskDelay((ms * 1000) / portTICK_PERIOD_US);
@@ -52,10 +38,8 @@ void delay_until_ms(TickType_t *previous_wake_time, int ms) {
   vTaskDelayUntil(previous_wake_time, (ms * 1000) / portTICK_PERIOD_US);
 }
 
-//*****************************************************************
-// Create a thread that prints out A to the screen every two seconds
-// this task will delete its self after printing out afew messages
-//*****************************************************************
+//**************************************************************************
+
 static void timer_poll_imu(TimerHandle_t /* timer */) {
   Sample sample;
   
@@ -68,10 +52,8 @@ static void timer_poll_imu(TimerHandle_t /* timer */) {
   }
 }
 
-//*****************************************************************
-// Create a thread that prints out B to the screen every second
-// this task will run forever
-//*****************************************************************
+//**************************************************************************
+
 static void thread_sd_write(void  * /* pvParameters */) {
   Serial.println("Thread thread_sd_write: Started");
 
@@ -93,6 +75,8 @@ static void thread_sd_write(void  * /* pvParameters */) {
     const size_t num_samples = read_bytes / sizeof(Sample);
     for (size_t i = 0; i < num_samples; ++i) {
       Sample& sample = samples[i];
+
+      const int PRECISION = 7;
       datafile.print(sample.time);
       datafile.print(',');
       datafile.print(sample.a_x, PRECISION);
@@ -114,17 +98,13 @@ static void thread_sd_write(void  * /* pvParameters */) {
 }
 
 //*****************************************************************
-// Task will periodically print out useful information about the tasks running
-// Is a useful tool to help figure out stack sizes being used
-// Run time stats are generated from all task timing collected since startup
-// No easy way yet to clear the run time stats yet
-//*****************************************************************
-static char ptrTaskList[400];  //temporary string buffer for task stats
 
 void task_monitor(void * /* pvParameters */) {
   Serial.println("Task Monitor: Started");
 
   while (1) {
+    static char ptrTaskList[400];  // temporary string buffer for task stats
+
     delay_ms(10000);  // print every 10 seconds
 
     Serial.flush();
@@ -267,9 +247,6 @@ void setup() {
   }
 }
 
-//*****************************************************************
-// This is now the rtos idle loop
-// No rtos blocking functions allowed!
 //*****************************************************************
 void loop() {
   // Optional commands, can comment/uncomment below
