@@ -6,7 +6,7 @@
 //**************************************************************************
 TaskHandle_t handle_writer_task;
 TaskHandle_t handle_monitor_task;
-TimerHandle_t handle_poll_imu;
+TaskHandle_t handle_poll_imu;
 StreamBufferHandle_t stream_data;
 
 String random_string;
@@ -23,33 +23,53 @@ struct Sample {
   float m_x;
   float m_y;
   float m_z;
+
+  float temperature;
 };
 
-constexpr size_t SAMPLE_BUFFER_SIZE = 64;
+constexpr size_t SAMPLE_BUFFER_SIZE = 32;
 constexpr size_t SAMPLE_BUFFER_SIZE_BYTES = SAMPLE_BUFFER_SIZE * sizeof(Sample);
 
-//**************************************************************************
-
-void delay_ms(int ms) {
-  vTaskDelay((ms * 1000) / portTICK_PERIOD_US);
-}
-
-void delay_until_ms(TickType_t *previous_wake_time, int ms) {
-  vTaskDelayUntil(previous_wake_time, (ms * 1000) / portTICK_PERIOD_US);
-}
+size_t dropped_samples = 0;
 
 //**************************************************************************
 
-static void timer_poll_imu(TimerHandle_t /* timer */) {
+static void thread_poll_imu(void  * /* pvParameters */) {
   Sample sample;
-  
-  sample.time = millis();
-  IMU.readAcceleration(sample.a_x, sample.a_y, sample.a_z);
-  IMU.readMagneticField(sample.m_x, sample.m_y, sample.m_z);
 
-  if (xStreamBufferSend(stream_data, &sample, sizeof(Sample), 0) != sizeof(Sample)) {
-    Serial.println("Failed to write!");
+  TickType_t previous_wake_time = xTaskGetTickCount();
+  
+  while (1) {
+    vTaskDelayUntil(&previous_wake_time, pdMS_TO_TICKS(10));
+
+    sample.time = millis();
+    IMU.readAcceleration(sample.a_x, sample.a_y, sample.a_z);
+    IMU.readMagneticField(sample.m_x, sample.m_y, sample.m_z);
+    sample.temperature = IMU.readTemperature();
+
+    if (xStreamBufferSend(stream_data, &sample, sizeof(Sample), pdMS_TO_TICKS(10)) != sizeof(Sample)) {
+      dropped_samples++;
+      Serial.print("Failed to write! (dropped=");
+      Serial.print(dropped_samples);
+      Serial.print(")");
+      Serial.print(". Buffer size ");
+      Serial.print(xStreamBufferBytesAvailable(stream_data));
+      Serial.print(" last tick ");
+      Serial.print(previous_wake_time);
+      Serial.print(" now tick ");
+      Serial.print(xTaskGetTickCount());
+      Serial.print(" next tick ");
+      Serial.print(previous_wake_time + pdMS_TO_TICKS(10));
+      Serial.println();
+
+      // Try again later
+      vTaskDelayUntil(&previous_wake_time, pdMS_TO_TICKS(100));
+    }
   }
+
+  // Shouldn't reach here
+  Serial.println("Thread thread_sd_write: Deleting");
+  vTaskDelete(NULL);
 }
 
 //**************************************************************************
@@ -67,7 +87,7 @@ static void thread_sd_write(void  * /* pvParameters */) {
     vTaskDelete(NULL);
   }
   
-  datafile.println("time,acc_x,acc_y,acc_z,mag_x,mag_y,mag_z");
+  datafile.println("time,acc_x,acc_y,acc_z,mag_x,mag_y,mag_z,temp");
 
   while (1) {
     static Sample samples[SAMPLE_BUFFER_SIZE];
@@ -90,10 +110,12 @@ static void thread_sd_write(void  * /* pvParameters */) {
       datafile.print(sample.m_y, PRECISION);
       datafile.print(',');
       datafile.print(sample.m_z, PRECISION);
+      datafile.print(',');
+      datafile.print(sample.temperature, PRECISION);
       datafile.println();
     }
     datafile.flush();
-    delay_ms(100);
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
@@ -105,14 +127,14 @@ void task_monitor(void * /* pvParameters */) {
   while (1) {
     static char ptrTaskList[400];  // temporary string buffer for task stats
 
-    delay_ms(10000);  // print every 10 seconds
+    vTaskDelay(pdMS_TO_TICKS(10000));  // print every 10 seconds
 
     Serial.flush();
     Serial.println("");
     Serial.println("****************************************************");
     Serial.print("Time: ");
     Serial.print(millis());
-    Serial.print("ms (");
+    Serial.print("ms (tick=");
     Serial.print(xTaskGetTickCount());
     Serial.println(")");
     Serial.print("Free Heap: ");
@@ -141,16 +163,17 @@ void task_monitor(void * /* pvParameters */) {
     Serial.flush();
 
     Serial.println("****************************************************");
-    Serial.println("[Stacks Free Bytes Remaining] ");
 
-    Serial.print("Thread thread_sd_write: ");
-    Serial.println(uxTaskGetStackHighWaterMark(handle_writer_task));
-
-    Serial.print("Monitor Stack: ");
-    Serial.println(uxTaskGetStackHighWaterMark(handle_monitor_task));
-
-    Serial.print("Buffer Size: ");
-    Serial.println(xStreamBufferBytesAvailable(stream_data));
+    Serial.print("Buffer usage: ");
+    size_t usage = xStreamBufferBytesAvailable(stream_data);
+    Serial.print(usage);
+    Serial.print("/");
+    Serial.print(usage + xStreamBufferSpacesAvailable(stream_data));
+    Serial.print(" bytes.");
+    Serial.println();
+    
+    Serial.print("Dropped samples: ");
+    Serial.println(dropped_samples);
 
     Serial.println("****************************************************");
     Serial.flush();
@@ -226,14 +249,9 @@ void setup() {
   // Create stream buffer for sharing data between the threads
   stream_data = xStreamBufferCreate(SAMPLE_BUFFER_SIZE_BYTES, sizeof(Sample));
 
+  xTaskCreate(thread_poll_imu, "IMU Poll", 128, nullptr, tskIDLE_PRIORITY + 3, &handle_poll_imu);
   xTaskCreate(task_monitor, "Task Monitor", 256, nullptr, tskIDLE_PRIORITY + 2, &handle_monitor_task);
   xTaskCreate(thread_sd_write, "SD Writer", 256, nullptr, tskIDLE_PRIORITY + 1, &handle_writer_task);
-
-  handle_poll_imu = xTimerCreate("IMU Poll", pdMS_TO_TICKS(10), pdTRUE, nullptr, &timer_poll_imu);
-  if(xTimerStart(handle_poll_imu, 0) != pdPASS) {
-    Serial.println("Failed to start timer!");
-    while (1);
-  }
   
   // Start the RTOS, this function will never return and will schedule the tasks.
   vTaskStartScheduler();
