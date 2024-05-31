@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import argparse
+from datetime import datetime
 
 def load_csv(fname):
     df = pd.read_csv(fname)
@@ -14,25 +15,37 @@ def load_csv(fname):
 parser = argparse.ArgumentParser()
 parser.add_argument("filename")
 parser.add_argument("-n", "--nfft", default=256, type=int)
+parser.add_argument("-o", "--overlap", default=32, type=int)
+parser.add_argument("--end", default=None, type=str)
 args = parser.parse_args()
 
 df = load_csv(args.filename)
+
+if args.end:
+    end_datetime = pd.to_datetime(args.end)
+    time_difference = end_datetime - df["time"].iloc[-1]
+    df['time'] += time_difference
+    print (f"Start {df['time'].iloc[0]}, end {df['time'].iloc[-1]}")
+
 duration = (df['time'].iloc[-1] - df['time'].iloc[0]).total_seconds()
 print (f"Loaded {len(df)} samples from {args.filename} over {duration}s!")
 
 dt = df['time'].diff().dt.total_seconds()[1:]
 sample_rate = 1.0 / np.median(dt)
 
-fig, axs = plt.subplots(3, 1, figsize=(20, 10), height_ratios=[2, 2, 1])
+fig, axs = plt.subplots(figsize=(20, 10))
 fig.canvas.manager.set_window_title("specgram")
 fig.suptitle('Specgram of frequency', fontsize=16)
-axs[0].specgram(df['acc'], Fs=sample_rate, NFFT=args.nfft, noverlap=32, cmap="plasma", detrend="mean")
-axs[0].set_xlabel("time (s)")
-axs[0].set_ylabel("freq (hz)")
+Pxx, freqs, bins, im = axs.specgram(
+        df['acc'], Fs=sample_rate, NFFT=args.nfft, noverlap=args.overlap, cmap="plasma", detrend="mean")
+axs.set_xlabel("time (s)")
+axs.set_ylabel("freq (hz)")
+fig.colorbar(im, ax=axs, label='Intensity (dB)')
 
-bins = np.linspace(0, 0.1, 100)
-axs[2].hist(dt, bins=bins)
-axs[2].set_xlabel("dt")
-axs[2].set_ylabel("count")
+num_bins = len(bins)
+step = max(1, int(90 * 60 / sample_rate))
+axs.set_xticks(bins[::step])
+times = df['time'].iloc[0] + pd.to_timedelta(bins[::step], unit="s")
+axs.set_xticklabels([f"{time.strftime('%m-%d %H:%M:%S')}" for time in times], rotation=45, ha='right')
 
 plt.show()
