@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import argparse
+import scipy.stats
 from datetime import datetime
 
 def load_csv(fname):
@@ -33,19 +34,27 @@ print (f"Loaded {len(df)} samples from {args.filename} over {duration}s!")
 dt = df['time'].diff().dt.total_seconds()[1:]
 sample_rate = 1.0 / np.median(dt)
 
-fig, axs = plt.subplots(figsize=(20, 10))
+fig, axs = plt.subplots(2, 1, figsize=(12, 8), height_ratios=[3, 1])
 fig.canvas.manager.set_window_title("specgram")
 fig.suptitle('Specgram of frequency', fontsize=16)
-Pxx, freqs, bins, im = axs.specgram(
+Pxx, freqs, bins, im = axs[0].specgram(
         df['acc'], Fs=sample_rate, NFFT=args.nfft, noverlap=args.overlap, cmap="plasma", detrend="mean")
-axs.set_xlabel("time (s)")
-axs.set_ylabel("freq (hz)")
-fig.colorbar(im, ax=axs, label='Intensity (dB)')
+axs[0].set_ylabel("freq (hz)")
+# fig.colorbar(im, ax=axs[0], label='Intensity (dB)')
 
 num_bins = len(bins)
 step = max(1, int(90 * 60 / sample_rate))
-axs.set_xticks(bins[::step])
+axs[0].set_xticks(bins[::step])
 times = df['time'].iloc[0] + pd.to_timedelta(bins[::step], unit="s")
-axs.set_xticklabels([f"{time.strftime('%m-%d %H:%M:%S')}" for time in times], rotation=45, ha='right')
+axs[0].set_xticklabels([f"{time.strftime('%m-%d %H:%M:%S')}" for time in times], rotation=45, ha='right')
+
+# axs[1].plot(df['time'], df['temp'])
+# axs[1].set_xlabel("time (s)")
+# axs[1].set_ylabel("temperature (C)")
+
+fig.tight_layout()
+fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+
+print (scipy.stats.describe(dt))
 
 plt.show()

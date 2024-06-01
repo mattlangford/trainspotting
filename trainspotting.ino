@@ -27,7 +27,7 @@ struct Sample {
   float temperature;
 };
 
-constexpr size_t SAMPLE_BUFFER_SIZE = 32;
+constexpr size_t SAMPLE_BUFFER_SIZE = 128;
 constexpr size_t SAMPLE_BUFFER_SIZE_BYTES = SAMPLE_BUFFER_SIZE * sizeof(Sample);
 
 size_t dropped_samples = 0;
@@ -54,12 +54,6 @@ static void thread_poll_imu(void  * /* pvParameters */) {
       Serial.print(")");
       Serial.print(". Buffer size ");
       Serial.print(xStreamBufferBytesAvailable(stream_data));
-      Serial.print(" last tick ");
-      Serial.print(previous_wake_time);
-      Serial.print(" now tick ");
-      Serial.print(xTaskGetTickCount());
-      Serial.print(" next tick ");
-      Serial.print(previous_wake_time + pdMS_TO_TICKS(10));
       Serial.println();
 
       // Try again later
@@ -187,6 +181,24 @@ void task_monitor(void * /* pvParameters */) {
 
 //*****************************************************************
 
+size_t get_num_files(File root) {
+  size_t count = 0;
+  while (true) {
+
+    File entry =  root.openNextFile();
+    if (! entry) {
+      // no more files
+      break;
+    }
+    count++;
+
+    entry.close();
+  }
+  return count;
+}
+
+//*****************************************************************
+
 void setup() {
   Serial.begin(115200);
 
@@ -214,14 +226,8 @@ void setup() {
     while (1);
   }
   Serial.println("IMU initialized.");
-
-  // Seed uuid with IMU data
-  while (!IMU.accelerationAvailable()) {}
-  float x, y, z;
-  IMU.readMagneticField(x, y, z);
-  randomSeed(x + pow(y, 2) + pow(z, 3));
-  for (int i = 0; i < 7; i++)
-    random_string += random(0, 9);
+  
+  random_string = String(get_num_files(SD.open("/")));
 
   Serial.print("Initializing IMU data file ");
   Serial.print(datafile_name());
