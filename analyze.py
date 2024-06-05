@@ -51,10 +51,10 @@ axs[0].set_xticklabels([f"{time.strftime('%m-%d %H:%M:%S')}" for time in times],
 # axs[1].plot(df['time'], df['temp'])
 # axs[1].set_xlabel("time (s)")
 # axs[1].set_ylabel("temperature (C)")
+axs[1].hist(dt)
 
 fig.tight_layout()
 fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
 
-print (scipy.stats.describe(dt))
 
 plt.show()

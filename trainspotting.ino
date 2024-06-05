@@ -44,7 +44,7 @@ static void thread_poll_imu(void  * /* pvParameters */) {
 
     sample.time = millis();
     IMU.readAcceleration(sample.a_x, sample.a_y, sample.a_z);
-    IMU.readMagneticField(sample.m_x, sample.m_y, sample.m_z);
+    //IMU.readMagneticField(sample.m_x, sample.m_y, sample.m_z);
     sample.temperature = IMU.readTemperature();
 
     if (xStreamBufferSend(stream_data, &sample, sizeof(Sample), pdMS_TO_TICKS(10)) != sizeof(Sample)) {
