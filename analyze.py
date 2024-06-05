@@ -50,8 +50,8 @@ Pxx, freqs, bins, im = axs[0].specgram(
         vmin=args.min_power,
         vmax=args.max_power
 )
-print(f"Max Power: {10 * np.log10(Pxx.min()):.3f}")
-print(f"Min Power: {10 * np.log10(Pxx.max()):.3f}")
+print(f"Min Power: {10 * np.log10(Pxx.min()):.3f}")
+print(f"Max Power: {10 * np.log10(Pxx.max()):.3f}")
 
 
 axs[0].set_ylabel("freq (hz)")
