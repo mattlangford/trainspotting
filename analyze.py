@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.mlab
 import argparse
 import scipy.stats
 from datetime import datetime
@@ -20,6 +21,7 @@ parser.add_argument("-o", "--overlap", default=32, type=int)
 parser.add_argument("--max-power", default=-40, type=int)
 parser.add_argument("--min-power", default=-80, type=int)
 parser.add_argument("--end", default=None, type=str)
+parser.add_argument("--x-ticks", default=10, type=float)
 args = parser.parse_args()
 
 df = load_csv(args.filename)
@@ -41,27 +43,27 @@ fig.canvas.manager.set_window_title("specgram")
 fig.suptitle('Specgram of frequency', fontsize=16)
 
 Pxx, freqs, bins, im = axs[0].specgram(
-        df['acc'],
-        Fs=sample_rate,
-        NFFT=args.nfft,
-        noverlap=args.overlap,
-        cmap="plasma",
-        detrend="mean",
-        vmin=args.min_power,
-        vmax=args.max_power
+    df['acc'],
+    Fs=sample_rate,
+    NFFT=args.nfft,
+    noverlap=args.overlap,
+    cmap="plasma",
+    detrend="mean",
+    window=matplotlib.mlab.window_none,
+    vmin=args.min_power,
+    vmax=args.max_power
 )
 print(f"Min Power: {10 * np.log10(Pxx.min()):.3f}")
 print(f"Max Power: {10 * np.log10(Pxx.max()):.3f}")
 
-
 axs[0].set_ylabel("freq (hz)")
 fig.colorbar(im, ax=axs[0], label='Intensity (dB)')
 
-num_bins = len(bins)
-step = max(1, int(90 * 60 / sample_rate))
-axs[0].set_xticks(bins[::step])
-times = df['time'].iloc[0] + pd.to_timedelta(bins[::step], unit="s")
-axs[0].set_xticklabels([f"{time.strftime('%m-%d %H:%M:%S')}" for time in times], rotation=45, ha='right')
+# num_bins = len(bins)
+# step = max(1, int(args.x_ticks * 60 / sample_rate))
+# axs[0].set_xticks(bins[::step])
+# times = df['time'].iloc[0] + pd.to_timedelta(bins[::step], unit="s")
+# axs[0].set_xticklabels([f"{time.strftime('%m-%d %H:%M:%S')}" for time in times], rotation=45, ha='right')
 
 axs[1].plot(df['time'], df['temp'])
 axs[1].set_xlabel("time (s)")
