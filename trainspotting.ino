@@ -37,6 +37,14 @@ size_t dropped_samples = 0;
 static void thread_poll_imu(void  * /* pvParameters */) {
   Sample sample;
 
+  // A little flash to show we're starting
+  for (size_t i = 0; i < 3; ++i) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    digitalWrite(LED_BUILTIN, LOW);
+    vTaskDelay(pdMS_TO_TICKS(250));
+  }
+  
   TickType_t previous_wake_time = xTaskGetTickCount();
   
   while (1) {
@@ -44,7 +52,7 @@ static void thread_poll_imu(void  * /* pvParameters */) {
 
     sample.time = millis();
     IMU.readAcceleration(sample.a_x, sample.a_y, sample.a_z);
-    //IMU.readMagneticField(sample.m_x, sample.m_y, sample.m_z);
+    IMU.readMagneticField(sample.m_x, sample.m_y, sample.m_z);
     sample.temperature = IMU.readTemperature();
 
     if (xStreamBufferSend(stream_data, &sample, sizeof(Sample), pdMS_TO_TICKS(10)) != sizeof(Sample)) {
@@ -90,7 +98,7 @@ static void thread_sd_write(void  * /* pvParameters */) {
     for (size_t i = 0; i < num_samples; ++i) {
       Sample& sample = samples[i];
 
-      const int PRECISION = 7;
+      const int PRECISION = 4;
       datafile.print(sample.time);
       datafile.print(',');
       datafile.print(sample.a_x, PRECISION);
@@ -246,6 +254,7 @@ void setup() {
   //               Probably ran out of heap.
   //    1 blink  - Stack overflow, Task needs more bytes defined for its stack!
   //               Use the taskMonitor thread to help gauge how much more you need
+  pinMode(LED_BUILTIN, OUTPUT);    // sets the digital pin 13 as output
   vSetErrorLed(LED_BUILTIN, HIGH);
 
   // sets the serial port to print errors to when the rtos crashes
