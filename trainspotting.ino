@@ -20,10 +20,6 @@ struct Sample {
   float a_y;
   float a_z;
 
-  float m_x;
-  float m_y;
-  float m_z;
-
   float temperature;
 };
 
@@ -52,7 +48,6 @@ static void thread_poll_imu(void  * /* pvParameters */) {
 
     sample.time = millis();
     IMU.readAcceleration(sample.a_x, sample.a_y, sample.a_z);
-    IMU.readMagneticField(sample.m_x, sample.m_y, sample.m_z);
     sample.temperature = IMU.readTemperature();
 
     if (xStreamBufferSend(stream_data, &sample, sizeof(Sample), pdMS_TO_TICKS(10)) != sizeof(Sample)) {
@@ -106,12 +101,6 @@ static void thread_sd_write(void  * /* pvParameters */) {
       datafile.print(sample.a_y, PRECISION);
       datafile.print(',');
       datafile.print(sample.a_z, PRECISION);
-      datafile.print(',');
-      datafile.print(sample.m_x, PRECISION);
-      datafile.print(',');
-      datafile.print(sample.m_y, PRECISION);
-      datafile.print(',');
-      datafile.print(sample.m_z, PRECISION);
       datafile.print(',');
       datafile.print(sample.temperature, PRECISION);
       datafile.println();
