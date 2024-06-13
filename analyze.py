@@ -19,7 +19,7 @@ def load_csv(fname):
 parser = argparse.ArgumentParser()
 parser.add_argument("filename")
 parser.add_argument("-n", "--nfft", default=256, type=int)
-parser.add_argument("-o", "--overlap", default=32, type=int)
+parser.add_argument("-o", "--overlap", default=None, type=int)
 parser.add_argument("--max-power", default=-40, type=int)
 parser.add_argument("--min-power", default=-80, type=int)
 parser.add_argument("--start", default=None, type=str)
@@ -27,7 +27,10 @@ parser.add_argument("--trim", default=1, type=int)
 
 parser.add_argument("--detect-threshold", default=-65, type=int)
 parser.add_argument("--detect-rel-height", default=0.75, type=int)
+
 args = parser.parse_args()
+if args.overlap is None:
+    args.overlap = args.nfft // 2
 
 df = load_csv(args.filename)
 df = df[args.trim:-args.trim]
@@ -78,8 +81,8 @@ ends = bins[results_half[2].astype(int) + 1]
 
 for s, e, y in zip(starts, ends, ys):
     print(f"Starting at {to_time(s)} for {e - s:.1f}s")
-    axs[1].text(e, y, f"{e - s:.1f}s", color='r')
-    axs[1].text(s, y, f"{to_time(s)}", color='r',  horizontalalignment='right')
+    axs[1].text(e + 10, y, f"{e - s:.1f}s", color='r')
+    axs[1].text(s - 10, y, f"{to_time(s)}", color='r',  horizontalalignment='right')
 
 axs[1].hlines(ys, starts, ends, color='r')
 axs[1].plot(bins, power_data)
@@ -88,6 +91,6 @@ axs[1].set_xlabel("time (s)")
 axs[1].set_ylabel("power (dB)")
 
 fig.tight_layout()
-fig.subplots_adjust(left=0.10, right=0.95, top=0.95, bottom=0.10)
+fig.subplots_adjust(left=0.05, right=0.98, top=0.95, bottom=0.10)
 
 plt.show()
